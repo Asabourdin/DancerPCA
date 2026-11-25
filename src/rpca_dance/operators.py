@@ -1,1 +1,1 @@
-"""Proximal operators: soft thresholding and singular value thresholding. (Stage 3)"""
+"""Proximal operators: soft thresholding and singular value thresholding"""

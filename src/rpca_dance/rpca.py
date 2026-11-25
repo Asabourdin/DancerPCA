@@ -1,1 +1,1 @@
-"""Robust PCA: constrained version (inexact ALM) and penalized version. (Stage 3)"""
+"""Robust PCA: constrained version (inexact ALM) and penalized version"""

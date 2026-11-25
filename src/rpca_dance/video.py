@@ -1,4 +1,4 @@
-"""Video preparation: download, cut, resize, grayscale, frames <-> matrix."""
+"""Video preparation: download, cut, resize, grayscale, frames <-> matrix"""
 
 import shutil
 import subprocess
@@ -10,27 +10,29 @@ from PIL import Image
 
 
 def check_ffmpeg_installed() -> None:
-    """Stop with a clear message if ffmpeg is not installed."""
+    """Stop with a clear message if ffmpeg is not installed"""
+    #Troubleshoot for runs outside of my dev env
     if shutil.which("ffmpeg") is None:
         raise RuntimeError(
-            "ffmpeg was not found. Install it with: brew install ffmpeg"
+            "ffmpeg was not found: install it with: brew install ffmpeg"
         )
 
 
 def is_url(source: str) -> bool:
-    """Return True if the source looks like a web address, False for a local path."""
+    """Return True if the source looks like a web address, False for a local path"""
+    #-> to manage download
     return source.startswith("http://") or source.startswith("https://")
 
 
 def download_video(url: str, output_dir: Path) -> Path:
-    """Download a video with yt-dlp, unless it is already there.
+    """Download a video with yt-dlp, unless it is already dwnld
 
-    Inputs: the video URL and the folder where the file goes.
-    Output: the path of the downloaded .mp4 file.
+    Inputs: the video URL and the folder where the file goes
+    Output: the path of the downloaded .mp4 file
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     options = {
-        # Video only, at most 720p: we shrink it to 160 x 90 anyway.
+        # Video only, at most 720p: we shrink it to 160 x 90 anyways
         "format": "bestvideo[height<=720][ext=mp4]/best[height<=720][ext=mp4]",
         "outtmpl": str(output_dir / "%(id)s.%(ext)s"),
         "quiet": True,
@@ -56,10 +58,9 @@ def extract_frames(
     frame_width: int,
     frame_height: int,
 ) -> None:
-    """Cut a time window from the video and save it as small grayscale PNG frames.
+    """Cut a time window from the video and save it as small grayscale PNG frames
 
-    ffmpeg does all the work: it keeps the window, samples the frames,
-    resizes them and converts them to gray. Old frames in frames_dir are deleted.
+    ffmpeg does all the work: it keeps the window, samples the frames resizes them and converts them to gray. Old frames in frames_dir are deleted.
     """
     check_ffmpeg_installed()
     if frames_dir.exists():
@@ -79,9 +80,9 @@ def extract_frames(
 
 
 def load_frames(frames_dir: Path) -> np.ndarray:
-    """Load the PNG frames of a folder, in order.
+    """Load the PNG frames of a folder, in order
 
-    Output: a float array of shape (T, height, width) with values in [0, 1].
+    Output: a float array of shape (T, height, width) with values in [0, 1]
     """
     frame_paths = sorted(frames_dir.glob("frame_*.png"))
     if len(frame_paths) == 0:
@@ -104,11 +105,10 @@ def prepare_video(
     frame_height: int,
 ) -> np.ndarray:
     """Go from a URL or a local file to an array of frames.
-
-    If the source is a URL, the video is downloaded first.
     Output: a float array of shape (T, height, width) with values in [0, 1].
     """
     if is_url(source):
+        #if the source is a url then the first step is to download the video
         video_path = download_video(source, raw_video_dir)
     else:
         video_path = Path(source)
@@ -122,15 +122,15 @@ def prepare_video(
 
 
 def frames_to_matrix(frames: np.ndarray) -> np.ndarray:
-    """Turn frames of shape (T, height, width) into a matrix of shape (height * width, T).
+    """Turn frames of shape (T, height, width) into a matrix of shape (height * width, T)
 
-    Each frame is flattened row by row into one column.
+    Each frame is flattened row by row into one column
     """
     number_of_frames = frames.shape[0]
     return frames.reshape(number_of_frames, -1).T
 
 
 def matrix_to_frames(matrix: np.ndarray, frame_height: int, frame_width: int) -> np.ndarray:
-    """Turn a matrix of shape (height * width, T) back into frames of shape (T, height, width)."""
+    """Turn a matrix of shape (height * width, T) back into frames of shape (T, height, width)"""
     number_of_frames = matrix.shape[1]
     return matrix.T.reshape(number_of_frames, frame_height, frame_width)
