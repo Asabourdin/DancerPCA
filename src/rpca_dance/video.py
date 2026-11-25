@@ -134,3 +134,27 @@ def matrix_to_frames(matrix: np.ndarray, frame_height: int, frame_width: int) ->
     """Turn a matrix of shape (height * width, T) back into frames of shape (T, height, width)"""
     number_of_frames = matrix.shape[1]
     return matrix.T.reshape(number_of_frames, frame_height, frame_width)
+
+
+def check_fixed_camera(frames: np.ndarray) -> dict:
+    """Measure how much the video changes from one frame to the next
+
+    If the camera is fixed, the jumps stay small and similar over time.
+    A camera move or a cut shows up as one jump much bigger than the others
+    Input: frames of shape (T, height, width)
+    Output: a dictionary with the per-pixel median image, the T - 1 frame-to-frame differences (mean absolute change of the pixels), the biggest jump, the frame where it happens, the median jump and their ratio
+    """
+    median_image = np.median(frames, axis=0)
+    # Mean over the pixels of |frame t+1 - frame t|, for every t at once
+    frame_differences = np.abs(np.diff(frames, axis=0)).mean(axis=(1, 2))
+    largest_jump_index = int(np.argmax(frame_differences))
+    largest_jump = float(frame_differences[largest_jump_index])
+    median_jump = float(np.median(frame_differences))
+    return {
+        "median_image": median_image,
+        "frame_differences": frame_differences,
+        "largest_jump": largest_jump,
+        "largest_jump_frame": largest_jump_index + 1,  # the jump is between this frame and the one before
+        "median_jump": median_jump,
+        "jump_ratio": largest_jump / median_jump,
+    }

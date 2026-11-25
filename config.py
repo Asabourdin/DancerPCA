@@ -33,9 +33,17 @@ FRAME_HEIGHT = 90
 # -> Stopping rule for the constrained version: ||M - L - S||_F / ||M||_F < tol
 RPCA_TOLERANCE = 1e-7
 RPCA_MAX_ITERATIONS = 500
+# mu (the step size of the ALM method) is multiplied by this at each iteration
+ALM_MU_GROWTH = 1.5
 
 # Penalized version: maximum number of alternating steps
 PENALIZED_MAX_ITERATIONS = 200
+# Stop when the objective drops by less than this (relative) between two iterations
+PENALIZED_TOLERANCE = 1e-7
+
+# Toy example (4 pixels, 3 frames): weights of the penalized version
+TOY_LOW_RANK_WEIGHT = 0.1
+TOY_SPARSE_WEIGHT = 0.05
 
 # Multipliers of the default lambda = 1 / sqrt(max(n, T)) tried on the video
 LAMBDA_MULTIPLIERS = [0.5, 1.0, 2.0]
@@ -56,12 +64,12 @@ ANNOTATION_UPSCALE_FACTOR = 4
 
 
 # similarity score
-# Common size (width, height) of the cropped silhouettes.
+# Common size (width, height) of the  silhouettes
 SILHOUETTE_WIDTH = 64
 SILHOUETTE_HEIGHT = 64
 
-# Largest time shift (in frames) tried when aligning the two videos.
+# Largest time shift (in frames) tried when aligning the two videos
 MAX_OFFSET_FRAMES = 40
 
-# Set to an integer to force the offset instead of searching for it.
+# Set to an integer to force the offset instead of searching for it
 MANUAL_OFFSET_FRAMES = None
