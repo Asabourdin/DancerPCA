@@ -29,7 +29,7 @@ FRAMES_PER_SECOND = 8
 FRAME_WIDTH = 160
 FRAME_HEIGHT = 90
 
-# Color frames (4 times larger): input of DeepLabV3 and frames to annotate by hand
+# Color frames (4 times larger): the frames to annotate by hand, and the size of the hand-made masks
 COLOR_FRAME_WIDTH = 640
 COLOR_FRAME_HEIGHT = 360
 
@@ -91,7 +91,6 @@ NUMBER_OF_FRAMES_TO_ANNOTATE = 10
 
 # Baselines
 CLASSIC_PCA_RANK = 1
-DEEPLAB_BATCH_SIZE = 8
 
 
 # similarity score
@@ -104,3 +103,11 @@ MAX_OFFSET_FRAMES = 40
 
 # Set to an integer to force the offset instead of searching for it
 MANUAL_OFFSET_FRAMES = None
+
+
+# Lighting stress test (stage 5): artificial brightness changes added to M
+# Slow ramp: the gain goes from 1 - amplitude (first frame) to 1 + amplitude (last frame)
+LIGHTING_RAMP_AMPLITUDE = 0.2
+# Sudden step, like a phone's auto-exposure: frames after this one get the gain below
+LIGHTING_STEP_FRAME = 100
+LIGHTING_STEP_GAIN = 0.8

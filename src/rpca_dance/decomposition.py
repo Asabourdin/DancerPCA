@@ -33,8 +33,25 @@ def run_decomposition(
     matrix: np.ndarray, rule: str, multiplier: float, tolerance: float,
     max_iterations: int, output_path: Path,
 ) -> dict:
-    """Run Robust PCA (FISTA) once and save L, S and the main numbers; load them if already saved
+    """Pick lambda1 and lambda2 with `rule` and `multiplier`, then run (or load) Robust PCA
 
+    Output: the dictionary of run_with_weights
+    """
+    if output_path.exists():
+        print(f"Loading saved decomposition: {output_path.name}")
+        return load_decomposition(output_path)
+    low_rank_weight, sparse_weight, noise_level = choose_weights(matrix, rule, multiplier)
+    print(f"Running Robust PCA ({rule} rule, x{multiplier})")
+    return run_with_weights(matrix, low_rank_weight, sparse_weight, noise_level, tolerance, max_iterations, output_path)
+
+
+def run_with_weights(
+    matrix: np.ndarray, low_rank_weight: float, sparse_weight: float, noise_level: float,
+    tolerance: float, max_iterations: int, output_path: Path,
+) -> dict:
+    """Run Robust PCA (FISTA) once with given lambdas and save L, S and the main numbers; load them if already saved
+
+    noise_level is only stored, to know later where the lambdas came from
     L and S are saved as float32 to halve the file size
     Output: a dictionary with "low_rank", "sparse", "low_rank_weight", "sparse_weight",
     "noise_level", "run_time", "iterations", "rank", "objective"
@@ -42,8 +59,7 @@ def run_decomposition(
     if output_path.exists():
         print(f"Loading saved decomposition: {output_path.name}")
         return load_decomposition(output_path)
-    low_rank_weight, sparse_weight, noise_level = choose_weights(matrix, rule, multiplier)
-    print(f"Running Robust PCA ({rule} rule, x{multiplier}): lambda1 = {low_rank_weight:.4f}, lambda2 = {sparse_weight:.5f}")
+    print(f"Running Robust PCA: lambda1 = {low_rank_weight:.4f}, lambda2 = {sparse_weight:.5f}")
     low_rank, sparse, history = rpca_fista(matrix, low_rank_weight, sparse_weight, tolerance, max_iterations, verbose=True)
     result = {
         "low_rank": low_rank.astype(np.float32),

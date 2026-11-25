@@ -4,7 +4,9 @@ import numpy as np
 from PIL import Image
 
 from rpca_dance.baselines import temporal_median
-from rpca_dance.evaluation import evaluate_if_possible, f1_score, frame_numbers_to_annotate, load_ground_truth
+from rpca_dance.evaluation import (
+    describe_mask_file, evaluate_if_possible, f1_score, frame_numbers_to_annotate, load_ground_truth, mask_iou,
+)
 from rpca_dance.masks import foreground_masks, resize_masks
 
 
@@ -56,3 +58,21 @@ def test_ground_truth_mask_is_loaded_and_resized(tmp_path):
     truth = load_ground_truth(tmp_path, frame_height=2, frame_width=2)
     assert list(truth) == [3]
     assert truth[3].tolist() == [[True, False], [False, False]]
+
+
+def test_mask_iou():
+    first = np.array([True, True, False, False])
+    second = np.array([True, False, True, False])
+    assert mask_iou(first, second) == 1 / 3
+    assert mask_iou(first, first) == 1.0
+
+
+def test_describe_mask_file_counts_gray_pixels(tmp_path):
+    drawn = np.zeros((4, 6), dtype=np.uint8)
+    drawn[0, :3] = 255
+    drawn[1, 0] = 128  # one anti-aliased edge pixel
+    Image.fromarray(drawn).save(tmp_path / "frame_0001_mask.png")
+    report = describe_mask_file(tmp_path / "frame_0001_mask.png")
+    assert (report["width"], report["height"]) == (6, 4)
+    assert report["gray_pixels"] == 1
+    assert report["dancer_share"] == 4 / 24

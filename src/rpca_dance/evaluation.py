@@ -82,3 +82,81 @@ def evaluate_if_possible(method_masks: dict, ground_truth_dir: Path, frame_heigh
         return None
     print(f"Found {len(truth)} hand-made masks: computing F1 scores.")
     return evaluate_methods(method_masks, truth)
+
+
+def describe_mask_file(mask_path: Path) -> dict:
+    """Check one hand-made mask: its size, its image mode, and how many pixels are not pure black or white
+
+    Gray pixels come from anti-aliasing on the edges of the drawing; transparent pixels come from an
+    RGBA export. Both are handled by load_ground_truth (gray > 127 is a dancer, transparent pixels are black here)
+    """
+    image = Image.open(mask_path)
+    gray_levels = np.asarray(image.convert("L"))
+    in_between = (gray_levels > 0) & (gray_levels < 255)
+    transparent_pixels = 0
+    if image.mode == "RGBA":
+        transparent_pixels = int(np.sum(np.asarray(image)[:, :, 3] == 0))
+    return {
+        "name": mask_path.name,
+        "width": image.size[0],
+        "height": image.size[1],
+        "mode": image.mode,
+        "gray_pixels": int(np.sum(in_between)),
+        "transparent_pixels": transparent_pixels,
+        "dancer_share": float(np.mean(gray_levels > 127)),
+    }
+
+
+def check_ground_truth_files(ground_truth_dir: Path, expected_width: int, expected_height: int) -> list[dict]:
+    """Describe every hand-made mask and print one line per mask; warn if a size is wrong"""
+    reports = []
+    for mask_path in sorted(ground_truth_dir.glob("frame_*_mask.png")):
+        report = describe_mask_file(mask_path)
+        size_text = "ok"
+        if report["width"] != expected_width or report["height"] != expected_height:
+            size_text = "WRONG SIZE"
+        print(
+            f"{report['name']}: {report['width']} x {report['height']} ({size_text}), "
+            f"mode {report['mode']}, {report['gray_pixels']} gray pixels, "
+            f"{report['transparent_pixels']} transparent pixels, dancer share {report['dancer_share']:.4f}"
+        )
+        reports.append(report)
+    return reports
+
+
+def mask_iou(first_masks: np.ndarray, second_masks: np.ndarray) -> float:
+    """Intersection over union of two sets of boolean masks of the same shape (1 = same masks)"""
+    intersection = np.sum(first_masks & second_masks)
+    union = np.sum(first_masks | second_masks)
+    if union == 0:
+        return 1.0
+    return float(intersection / union)
+
+
+def print_f1_table(scores: dict, frame_numbers: list[int], title: str) -> None:
+    """Print the F1 scores: one row per method, one column per annotated frame, then the mean"""
+    print(title)
+    header = "".join([f"{number:>7d}" for number in frame_numbers])
+    print(f"{'method':<24s}{header}{'mean':>8s}")
+    for method_name, values in scores.items():
+        row = "".join([f"{value:7.3f}" for value in values])
+        print(f"{method_name:<24s}{row}{values.mean():8.3f}")
+
+
+def precision_and_recall(method_masks: dict, truth: dict) -> dict:
+    """Precision and recall of each method, pooled over all annotated frames
+
+    precision = TP / (TP + FP): the share of marked pixels that are really dancer pixels (low with shadows)
+    recall = TP / (TP + FN): the share of dancer pixels that are found (low with holes)
+    Output: {method name: (precision, recall)}
+    """
+    frame_indices = [frame_number - 1 for frame_number in sorted(truth)]
+    true_masks = np.stack([truth[frame_number] for frame_number in sorted(truth)])
+    rates = {}
+    for method_name, masks in method_masks.items():
+        predicted = masks[frame_indices]
+        true_positives = np.sum(predicted & true_masks)
+        precision = true_positives / max(np.sum(predicted), 1)
+        recall = true_positives / max(np.sum(true_masks), 1)
+        rates[method_name] = (float(precision), float(recall))
+    return rates

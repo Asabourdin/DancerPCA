@@ -164,3 +164,44 @@ def plot_mask_grid(
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def plot_f1_scores(scores: dict, title: str, output_path: Path) -> None:
+    """F1 score of each method: one gray dot per annotated frame and a black bar for the mean
+
+    scores: {method name: array of F1 scores, one per annotated frame}
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    method_names = list(scores)
+    figure, axis = plt.subplots(figsize=(1.1 * len(method_names) + 2, 3.5))
+    for position, method_name in enumerate(method_names):
+        values = scores[method_name]
+        axis.bar(position, values.mean(), width=0.6, color="lightgray", edgecolor="black")
+        axis.scatter(np.full(len(values), position), values, color="black", s=10, zorder=3)
+    axis.set_xticks(range(len(method_names)))
+    axis.set_xticklabels(method_names, rotation=30, ha="right", fontsize=8)
+    axis.set_ylim(0, 1)
+    axis.set_ylabel("F1 score")
+    axis.set_title(title, fontsize=9)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_brightness_gains(gains: dict, output_path: Path) -> None:
+    """Gain of each frame for the lighting stress test (1 = original brightness)
+
+    gains: {name of the change: array of T gains}
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, axis = plt.subplots(figsize=(6, 2.8))
+    line_styles = ["-", "--", ":"]
+    for position, change_name in enumerate(gains):
+        frame_numbers = np.arange(1, len(gains[change_name]) + 1)
+        axis.plot(frame_numbers, gains[change_name], color="black", linestyle=line_styles[position], label=change_name)
+    axis.set_xlabel("frame")
+    axis.set_ylabel("brightness gain")
+    axis.legend()
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)

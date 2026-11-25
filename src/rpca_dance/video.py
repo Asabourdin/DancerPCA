@@ -62,7 +62,7 @@ def extract_frames(
     """Cut a time window from the video and save it as small PNG frames
 
     ffmpeg does all the work: it keeps the window, samples the frames resizes them and converts them to gray. Old frames in frames_dir are deleted.
-    pixel_format: "gray16le" (16-bit gray, for Robust PCA) or "rgb24" (color, for DeepLabV3 and for hand annotation)
+    pixel_format: "gray16le" (16-bit gray, for Robust PCA) or "rgb24" (color, for hand annotation)
     """
     check_ffmpeg_installed()
     if frames_dir.exists():
