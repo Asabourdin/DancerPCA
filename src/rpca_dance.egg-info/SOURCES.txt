@@ -1,7 +1,0 @@
-README.md
-pyproject.toml
-src/rpca_dance/__init__.py
-src/rpca_dance.egg-info/PKG-INFO
-src/rpca_dance.egg-info/SOURCES.txt
-src/rpca_dance.egg-info/dependency_links.txt
-src/rpca_dance.egg-info/top_level.txt
