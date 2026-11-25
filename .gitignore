@@ -1,0 +1,17 @@
+.venv/
+
+data/
+results/
+*.mp4
+*.webm
+*.mkv
+*.mov
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+.DS_Store
+
+*.zip
