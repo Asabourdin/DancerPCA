@@ -29,23 +29,16 @@ FRAME_WIDTH = 160
 FRAME_HEIGHT = 90
 
 
-# Robust PCA params
-# -> Stopping rule for the constrained version: ||M - L - S||_F / ||M||_F < tol
+# Robust PCA params (proximal gradient descent on the penalized problem)
+# -> Stop when the objective drops by less than this (relative) between two iterations
 RPCA_TOLERANCE = 1e-7
-RPCA_MAX_ITERATIONS = 500
-# mu (the step size of the ALM method) is multiplied by this at each iteration
-ALM_MU_GROWTH = 1.5
+RPCA_MAX_ITERATIONS = 2000
 
-# Penalized version: maximum number of alternating steps
-PENALIZED_MAX_ITERATIONS = 200
-# Stop when the objective drops by less than this (relative) between two iterations
-PENALIZED_TOLERANCE = 1e-7
-
-# Toy example (4 pixels, 3 frames): weights of the penalized version
+# Toy example (4 pixels, 3 frames): weights lambda1 (low rank) and lambda2 (sparse)
 TOY_LOW_RANK_WEIGHT = 0.1
 TOY_SPARSE_WEIGHT = 0.05
 
-# Multipliers of the default lambda = 1 / sqrt(max(n, T)) tried on the video
+# Multipliers of lambda tried on the video (lambda itself is chosen in stage 5)
 LAMBDA_MULTIPLIERS = [0.5, 1.0, 2.0]
 
 # Simulations

@@ -1,6 +1,7 @@
-"""Robust PCA: constrained version (inexact ALM) and penalized version
+"""Robust PCA solved by proximal gradient descent on the penalized problem
 
-Both versions only use the two operators of operators.py
+Problem: minimize F(L, S) = 1/2 ||M - L - S||_F^2 + lambda1 ||L||_* + lambda2 ||S||_1
+The algorithm only uses the two proximal operators of operators.py
 """
 
 import time
@@ -9,81 +10,34 @@ import numpy as np
 
 from rpca_dance.operators import singular_value_threshold, soft_threshold
 
+# The gradient of 1/2 ||M - L - S||^2 with respect to the pair (L, S) is
+# (-(M - L - S), -(M - L - S)). It is 2-Lipschitz, so the step size is 1/2.
+STEP_SIZE = 0.5
+
 
 def default_lambda(matrix: np.ndarray) -> float:
-    """Return the standard weight of the sparse part: 1 / sqrt(max(n, T))"""
+    """Return 1 / sqrt(max(n, T)), the usual ratio lambda2 / lambda1 (Candes, Li, Ma, Wright, 2011)"""
     return 1.0 / np.sqrt(max(matrix.shape))
 
 
 def new_history() -> dict:
     """Return an empty history: one list per quantity we follow, plus the run time"""
-    return {"errors": [], "objective": [], "rank": [], "nonzeros": [], "run_time": 0.0}
+    return {"objective": [], "changes": [], "rank": [], "nonzeros": [], "run_time": 0.0}
 
 
-def record_step(history: dict, error: float, objective: float, singular_values: np.ndarray, sparse_part: np.ndarray) -> None:
+def record_step(history: dict, objective: float, change: float, singular_values: np.ndarray, sparse_part: np.ndarray) -> None:
     """Add the numbers of one iteration to the history"""
-    history["errors"].append(error)
     history["objective"].append(objective)
+    history["changes"].append(change)
     history["rank"].append(int(np.count_nonzero(singular_values)))
     history["nonzeros"].append(int(np.count_nonzero(sparse_part)))
-
-
-def initial_dual_variable(matrix: np.ndarray, sparse_weight: float) -> np.ndarray:
-    """Starting value of the Lagrange multiplier Y
-
-    Y = M / J(M), with J(M) = max(spectral norm of M, max |M_ij| / lambda)
-    """
-    spectral_norm = np.linalg.norm(matrix, ord=2)
-    scaled_max_entry = np.abs(matrix).max() / sparse_weight
-    return matrix / max(spectral_norm, scaled_max_entry)
-
-
-def rpca_constrained(
-    matrix: np.ndarray,
-    tolerance: float,
-    max_iterations: int,
-    mu_growth: float,
-    sparse_weight: float | None = None,
-    verbose: bool = False,
-) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Principal Component Pursuit: min ||L||_* + lambda ||S||_1 subject to L + S = M
-
-    Solved with the inexact augmented Lagrange multiplier method 
-    Each iteration: L = SVT(M - S + Y/mu, 1/mu), S = soft(M - L + Y/mu, lambda/mu), then Y moves by mu * (M - L - S), and mu grows by mu_growth
-    -> stops when ||M - L - S||_F / ||M||_F < tolerance, or after max_iterations
-    Output: L, S and the history (errors, objective, rank, nonzeros, run_time)
-    """
-    start_time = time.perf_counter()
-    if sparse_weight is None:
-        sparse_weight = default_lambda(matrix)
-    matrix_norm = np.linalg.norm(matrix)
-    dual_variable = initial_dual_variable(matrix, sparse_weight)
-    mu = 1.25 / np.linalg.norm(matrix, ord=2)  # usual starting value from the paper
-    mu_max = mu * 1e7  # mu stops growing here, so the steps stay stable
-    sparse_part = np.zeros_like(matrix)
-    history = new_history()
-    for iteration in range(1, max_iterations + 1):
-        low_rank_part, singular_values = singular_value_threshold(matrix - sparse_part + dual_variable / mu, 1.0 / mu)
-        sparse_part = soft_threshold(matrix - low_rank_part + dual_variable / mu, sparse_weight / mu)
-        residual = matrix - low_rank_part - sparse_part
-        dual_variable = dual_variable + mu * residual
-        mu = min(mu * mu_growth, mu_max)
-        error = np.linalg.norm(residual) / matrix_norm
-        objective = singular_values.sum() + sparse_weight * np.abs(sparse_part).sum()
-        record_step(history, error, objective, singular_values, sparse_part)
-        if verbose and iteration % 10 == 0:
-            print(f"Running Robust PCA: iteration {iteration}, error {error:.1e}")
-        if error < tolerance:
-            break
-    history["run_time"] = time.perf_counter() - start_time
-    return low_rank_part, sparse_part, history
 
 
 def penalized_objective(
     matrix: np.ndarray, low_rank_part: np.ndarray, sparse_part: np.ndarray,
     singular_values: np.ndarray, low_rank_weight: float, sparse_weight: float,
 ) -> float:
-    """Value of 1/2 ||M - L - S||_F^2 + lambda1 ||L||_* + lambda2 ||S||_1
+    """Value of F(L, S) = 1/2 ||M - L - S||_F^2 + lambda1 ||L||_* + lambda2 ||S||_1
 
     singular_values are the singular values of L (their sum is ||L||_*)
     """
@@ -93,7 +47,7 @@ def penalized_objective(
     return fit_term + low_rank_term + sparse_term
 
 
-def rpca_penalized(
+def rpca_proximal_gradient(
     matrix: np.ndarray,
     low_rank_weight: float,
     sparse_weight: float,
@@ -101,14 +55,15 @@ def rpca_penalized(
     max_iterations: int,
     verbose: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Minimize 1/2 ||M - L - S||_F^2 + lambda1 ||L||_* + lambda2 ||S||_1
+    """Robust PCA by proximal gradient descent (course, matrix completion lecture, chapter 4)
 
-    This is the statistical model with noise: M = L + S + small noise
-    Alternating exact minimization: L = SVT(M - S, lambda1), then S = soft(M - L, lambda2)
-    Each step can only lower the objective, so the objective never goes up
-    -> Stops when the objective drops by less than tolerance (relative), or after max_iterations
-    In the history, "errors" is the relative change of L between two iterations
-    Output: L, S and the history (errors, objective, rank, nonzeros, run_time)
+    Each iteration:
+      1. gradient step of size 1/2 on 1/2 ||M - L - S||^2: L + R/2 and S + R/2, with R = M - L - S
+      2. proximal step: SVT with threshold lambda1/2 on L, soft thresholding with threshold lambda2/2 on S
+    With this step size the objective never goes up
+    Stops when the objective drops by less than `tolerance` (relative), or after max_iterations
+    "changes" in the history is ||L_new - L_old||_F / ||L_new||_F
+    Output: L, S and the history (objective, changes, rank, nonzeros, run_time)
     """
     start_time = time.perf_counter()
     low_rank_part = np.zeros_like(matrix)
@@ -116,14 +71,15 @@ def rpca_penalized(
     history = new_history()
     previous_objective = np.inf
     for iteration in range(1, max_iterations + 1):
-        previous_low_rank_part = low_rank_part
-        low_rank_part, singular_values = singular_value_threshold(matrix - sparse_part, low_rank_weight)
-        sparse_part = soft_threshold(matrix - low_rank_part, sparse_weight)
+        residual = matrix - low_rank_part - sparse_part
+        new_low_rank_part, singular_values = singular_value_threshold(low_rank_part + STEP_SIZE * residual, STEP_SIZE * low_rank_weight)
+        sparse_part = soft_threshold(sparse_part + STEP_SIZE * residual, STEP_SIZE * sparse_weight)
+        change = np.linalg.norm(new_low_rank_part - low_rank_part) / max(np.linalg.norm(new_low_rank_part), 1e-12)
+        low_rank_part = new_low_rank_part
         objective = penalized_objective(matrix, low_rank_part, sparse_part, singular_values, low_rank_weight, sparse_weight)
-        change = np.linalg.norm(low_rank_part - previous_low_rank_part) / max(np.linalg.norm(low_rank_part), 1e-12)
-        record_step(history, change, objective, singular_values, sparse_part)
-        if verbose and iteration % 10 == 0:
-            print(f"Running penalized Robust PCA: iteration {iteration}, objective {objective:.4e}")
+        record_step(history, objective, change, singular_values, sparse_part)
+        if verbose and iteration % 20 == 0:
+            print(f"Running Robust PCA: iteration {iteration}, objective {objective:.4e}, change {change:.1e}")
         if previous_objective - objective < tolerance * abs(previous_objective):
             break
         previous_objective = objective

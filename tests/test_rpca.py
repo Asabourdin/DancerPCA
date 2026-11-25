@@ -1,10 +1,10 @@
-"""Tests for both versions of Robust PCA, on the toy example and on a random matrix"""
+"""Tests for Robust PCA (proximal gradient descent), on the toy example and on a random matrix"""
 
 import numpy as np
 
 import config
 from rpca_dance.baselines import classic_pca
-from rpca_dance.rpca import rpca_constrained, rpca_penalized
+from rpca_dance.rpca import rpca_proximal_gradient
 from rpca_dance.simulation import make_low_rank_plus_sparse
 
 
@@ -25,45 +25,38 @@ def test_classic_pca_smears_the_dancer():
     assert np.count_nonzero(np.abs(sparse_part) > 0.01) > 1
 
 
-def test_constrained_rpca_finds_the_dancer_in_the_toy_example():
+def test_robust_pca_puts_the_dancer_in_s_only():
     background, dancer = make_toy_example()
-    low_rank_part, sparse_part, history = rpca_constrained(
-        background + dancer, config.RPCA_TOLERANCE, config.RPCA_MAX_ITERATIONS, config.ALM_MU_GROWTH
-    )
-    assert np.allclose(low_rank_part, background, atol=1e-5)
-    assert np.allclose(sparse_part, dancer, atol=1e-5)
-    assert history["rank"][-1] == 1
-
-
-def test_penalized_rpca_puts_the_dancer_in_s_only():
-    background, dancer = make_toy_example()
-    _, sparse_part, history = rpca_penalized(
+    _, sparse_part, history = rpca_proximal_gradient(
         background + dancer, config.TOY_LOW_RANK_WEIGHT, config.TOY_SPARSE_WEIGHT,
-        config.PENALIZED_TOLERANCE, config.PENALIZED_MAX_ITERATIONS,
+        config.RPCA_TOLERANCE, config.RPCA_MAX_ITERATIONS,
     )
     # Only pixel 3 in frame 2 is non-zero: its value is shrunk a bit (the penalty adds bias)
     assert np.count_nonzero(sparse_part) == 1
     assert sparse_part[2, 1] > 0.5
+    assert history["rank"][-1] == 1
 
 
-def test_constrained_rpca_recovers_a_random_matrix_and_the_error_goes_down():
+def test_robust_pca_recovers_a_random_matrix_up_to_the_shrinkage_bias():
     random_generator = np.random.default_rng(config.RANDOM_SEED)
-    low_rank, sparse = make_low_rank_plus_sparse(100, 5, 0.05, random_generator)
-    low_rank_part, _, history = rpca_constrained(
-        low_rank + sparse, config.RPCA_TOLERANCE, config.RPCA_MAX_ITERATIONS, config.ALM_MU_GROWTH
+    rank = 5
+    low_rank, sparse = make_low_rank_plus_sparse(100, rank, 0.05, random_generator)
+    low_rank_weight = 0.1
+    low_rank_part, _, history = rpca_proximal_gradient(
+        low_rank + sparse, low_rank_weight, low_rank_weight / 10, config.RPCA_TOLERANCE, config.RPCA_MAX_ITERATIONS
     )
-    relative_error = np.linalg.norm(low_rank_part - low_rank) / np.linalg.norm(low_rank)
-    assert relative_error < config.SIMULATION_SUCCESS_TOLERANCE
-    assert history["errors"][-1] < config.RPCA_TOLERANCE
-    assert history["errors"][-1] < history["errors"][0]
+    # SVT shrinks each of the r singular values by about lambda1, so ||L_hat - L0||_F is about lambda1 * sqrt(r)
+    shrinkage_bias = low_rank_weight * np.sqrt(rank)
+    assert np.linalg.norm(low_rank_part - low_rank) < 2 * shrinkage_bias
+    assert history["rank"][-1] == rank
 
 
-def test_penalized_objective_never_goes_up():
+def test_objective_never_goes_up():
     random_generator = np.random.default_rng(config.RANDOM_SEED)
     low_rank, sparse = make_low_rank_plus_sparse(100, 5, 0.05, random_generator)
     noise = 0.01 * random_generator.standard_normal((100, 100))
-    _, _, history = rpca_penalized(
-        low_rank + sparse + noise, 0.5, 0.05, config.PENALIZED_TOLERANCE, config.PENALIZED_MAX_ITERATIONS
+    _, _, history = rpca_proximal_gradient(
+        low_rank + sparse + noise, 0.5, 0.05, config.RPCA_TOLERANCE, config.RPCA_MAX_ITERATIONS
     )
     objective_steps = np.diff(history["objective"])
     assert np.all(objective_steps <= 1e-10)
