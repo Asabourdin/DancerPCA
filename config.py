@@ -14,6 +14,7 @@ FRAMES_DIR = DATA_DIR / "frames"
 GROUND_TRUTH_DIR = DATA_DIR / "ground_truth"
 TO_ANNOTATE_DIR = GROUND_TRUTH_DIR / "to_annotate"
 RESULTS_DIR = PROJECT_ROOT / "results"
+DECOMPOSITIONS_DIR = RESULTS_DIR / "decompositions"
 
 
 # CORTIS GO dance practice video
@@ -28,6 +29,14 @@ FRAMES_PER_SECOND = 8
 FRAME_WIDTH = 160
 FRAME_HEIGHT = 90
 
+# Color frames (4 times larger): input of DeepLabV3 and frames to annotate by hand
+COLOR_FRAME_WIDTH = 640
+COLOR_FRAME_HEIGHT = 360
+
+# Second resolution, only for the resolution comparison of stage 5
+HIGH_RES_FRAME_WIDTH = 320
+HIGH_RES_FRAME_HEIGHT = 180
+
 
 # Robust PCA params (proximal gradient descent on the penalized problem)
 # -> Stop when the objective drops by less than this (relative) between two iterations
@@ -38,22 +47,51 @@ RPCA_MAX_ITERATIONS = 2000
 TOY_LOW_RANK_WEIGHT = 0.1
 TOY_SPARSE_WEIGHT = 0.05
 
-# Multipliers of lambda tried on the video (lambda itself is chosen in stage 5)
+# Video: two rules to choose lambda1 and lambda2 (see rpca_dance/decomposition.py)
+# "noise": both from the noise level sigma (Lasso chapter)
+# "candes": lambda1 from the noise level, lambda2 = lambda1 / sqrt(max(n, T))
+LAMBDA_RULES = ["noise", "candes"]
+# Rule used for the masks, the baselines comparison and part 2 (to confirm with the F1 scores)
+MAIN_LAMBDA_RULE = "candes"
+# Both lambdas are multiplied by these values for the comparison
 LAMBDA_MULTIPLIERS = [0.5, 1.0, 2.0]
 
-# Simulations
+# FISTA (accelerated proximal gradient): its objective can go up for a step,
+# so it stops when ||L_new - L_old||_F / ||L_new||_F < this value
+FISTA_TOLERANCE = 1e-5
+
+# Simulations (phase transition diagram), noiseless, n x n matrices
 RANDOM_SEED = 0
 SIMULATION_SIZE = 100
-SIMULATION_SUCCESS_TOLERANCE = 1e-3
+SIMULATION_RANK_RATIOS = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]  # r / n
+SIMULATION_SPARSITIES = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]  # rho
+SIMULATION_TRIALS = 3
+# lambda1 for the simulations; lambda2 = lambda1 / sqrt(n)
+SIMULATION_LOW_RANK_WEIGHT = 0.1
+# Success: ||L_hat - L0||_F < factor * lambda1 * sqrt(r) and rank(L_hat) = r
+SIMULATION_SUCCESS_FACTOR = 3
+SENSITIVITY_FACTORS = [2, 3, 5]
+
+# SDP check with CVXPY
+SDP_CHECK_SIZE = 30
+SDP_CHECK_RANK = 2
+SDP_CHECK_SPARSITY = 0.05
+SDP_TIMING_SIZES = [20, 40, 60, 80, 100]
+# Tight tolerance so that our solver and CVXPY are compared at their real optimum
+SDP_CHECK_TOLERANCE = 1e-9
+SDP_CHECK_MAX_ITERATIONS = 20000
 
 # Masks and evaluation
 # A pixel belongs to a dancer when |S| is above this value (pixels are in [0, 1])
 MASK_THRESHOLD = 0.1
 USE_OTSU_THRESHOLD = False
 
-# Number of frames exported for hand annotation, and their upscaling factor
+# Number of frames exported for hand annotation (color frames, 640 x 360)
 NUMBER_OF_FRAMES_TO_ANNOTATE = 10
-ANNOTATION_UPSCALE_FACTOR = 4
+
+# Baselines
+CLASSIC_PCA_RANK = 1
+DEEPLAB_BATCH_SIZE = 8
 
 
 # similarity score

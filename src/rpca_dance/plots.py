@@ -1,5 +1,6 @@
 """Figures, side-by-side montages, GIF/MP4 export"""
 
+import itertools
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -65,6 +66,101 @@ def plot_history(
         axis.set_yscale("log")
     axis.set_xlabel("iteration")
     axis.set_ylabel(label)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_success_maps(
+    success_maps: list[np.ndarray], titles: list[str],
+    rank_ratios: np.ndarray, sparsities: np.ndarray, output_path: Path,
+) -> None:
+    """Draw one phase transition diagram per map, side by side
+
+    Each map has shape (number of rank ratios, number of sparsities), values in [0, 1]
+    White = every trial succeeded, black = every trial failed
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    number_of_maps = len(success_maps)
+    figure, axes = plt.subplots(1, number_of_maps, figsize=(5 * number_of_maps, 4.5), squeeze=False, layout="constrained")
+    for axis, success_map, title in zip(axes[0], success_maps, titles):
+        image = axis.imshow(success_map, origin="lower", cmap="gray", vmin=0, vmax=1)
+        axis.set_xticks(range(len(sparsities)), [f"{value:.2f}" for value in sparsities], rotation=90)
+        axis.set_yticks(range(len(rank_ratios)), [f"{value:.2f}" for value in rank_ratios])
+        axis.set_xlabel("sparsity rho (share of corrupted entries)")
+        axis.set_ylabel("rank ratio r / n")
+        axis.set_title(title)
+    figure.colorbar(image, ax=axes[0].tolist(), label="share of successful trials")
+    figure.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(figure)
+
+
+def plot_solver_times(timings: dict, output_path: Path) -> None:
+    """Plot the run time of our solver and of CVXPY against the matrix size (log scale)"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, axis = plt.subplots(figsize=(6, 3.5))
+    axis.plot(timings["sizes"], timings["our_time"], color="black", marker="o", label="our FISTA solver")
+    axis.plot(timings["sizes"], timings["cvxpy_time"], color="gray", marker="s", linestyle="--", label="CVXPY (SDP)")
+    axis.set_yscale("log")
+    axis.set_xlabel("matrix size n (n x n)")
+    axis.set_ylabel("run time (seconds)")
+    axis.legend()
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def build_montage_frames(
+    original: np.ndarray, background: np.ndarray, dancers: np.ndarray, masks: np.ndarray, dancer_gain: float
+) -> np.ndarray:
+    """Put four videos side by side: original | background L | dancers |S| | mask
+
+    All inputs have shape (T, height, width). |S| is multiplied by dancer_gain so it is easier to see
+    Output: an array of shape (T, height, 4 * width) with values in [0, 1]
+    """
+    visible_dancers = np.clip(np.abs(dancers) * dancer_gain, 0, 1)
+    panels = [np.clip(original, 0, 1), np.clip(background, 0, 1), visible_dancers, masks.astype(float)]
+    return np.concatenate(panels, axis=2)
+
+
+def save_montage_image(montage_frames: np.ndarray, frame_indices: list[int], output_path: Path) -> None:
+    """Stack a few montage frames (one per row) and save them as one PNG, 2 times larger"""
+    stacked_rows = np.concatenate(montage_frames[frame_indices], axis=0)
+    save_frame_image(stacked_rows, output_path, upscale_factor=2)
+
+
+def save_montage_gif(montage_frames: np.ndarray, frames_per_second: int, output_path: Path) -> None:
+    """Save the montage frames as an animated GIF, at the speed of the sampled video"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    images = []
+    for frame in montage_frames:
+        pixel_values = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
+        images.append(Image.fromarray(pixel_values))
+    duration_ms = int(1000 / frames_per_second)
+    images[0].save(output_path, save_all=True, append_images=images[1:], duration=duration_ms, loop=0)
+
+
+def plot_mask_grid(
+    mask_rows: list[np.ndarray], row_titles: list[str], frame_indices: list[int], output_path: Path
+) -> None:
+    """Grid of masks: one row per method or setting, one column per chosen frame
+
+    mask_rows: a list of boolean arrays of shape (T, height, width); sizes may differ between rows
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    number_of_rows = len(mask_rows)
+    number_of_columns = len(frame_indices)
+    figure, axes = plt.subplots(number_of_rows, number_of_columns, figsize=(2.4 * number_of_columns, 1.5 * number_of_rows), squeeze=False)
+    cells = itertools.product(range(number_of_rows), range(number_of_columns))
+    for row, column in cells:
+        axis = axes[row, column]
+        axis.imshow(mask_rows[row][frame_indices[column]], cmap="gray", vmin=0, vmax=1)
+        axis.set_xticks([])
+        axis.set_yticks([])
+        if column == 0:
+            axis.set_ylabel(row_titles[row], rotation=0, ha="right", va="center", fontsize=8)
+        if row == 0:
+            axis.set_title(f"frame {frame_indices[column] + 1}", fontsize=8)
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)

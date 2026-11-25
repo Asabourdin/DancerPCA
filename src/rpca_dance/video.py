@@ -57,16 +57,19 @@ def extract_frames(
     frames_per_second: int,
     frame_width: int,
     frame_height: int,
+    pixel_format: str = "gray16le",
 ) -> None:
-    """Cut a time window from the video and save it as small grayscale PNG frames
+    """Cut a time window from the video and save it as small PNG frames
 
     ffmpeg does all the work: it keeps the window, samples the frames resizes them and converts them to gray. Old frames in frames_dir are deleted.
+    pixel_format: "gray16le" (16-bit gray, for Robust PCA) or "rgb24" (color, for DeepLabV3 and for hand annotation)
     """
     check_ffmpeg_installed()
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
     frames_dir.mkdir(parents=True)
-    video_filter = f"fps={frames_per_second},scale={frame_width}:{frame_height},format=gray"
+    # gray16le: 16-bit gray levels, so small changes are not rounded away (needed to measure the noise)
+    video_filter = f"fps={frames_per_second},scale={frame_width}:{frame_height},format={pixel_format}"
     command = [
         "ffmpeg", "-loglevel", "error",
         "-ss", str(start_seconds),
@@ -89,8 +92,22 @@ def load_frames(frames_dir: Path) -> np.ndarray:
         raise FileNotFoundError(f"No frames found in {frames_dir}")
     frames = []
     for frame_path in frame_paths:
-        image = Image.open(frame_path).convert("L")
-        frames.append(np.asarray(image, dtype=np.float64) / 255.0)
+        image = Image.open(frame_path)  # 16-bit grayscale PNG: values from 0 to 65535
+        frames.append(np.asarray(image, dtype=np.float64) / 65535.0)
+    return np.stack(frames)
+
+
+def load_color_frames(frames_dir: Path) -> np.ndarray:
+    """Load the color PNG frames of a folder, in order
+
+    Output: a uint8 array of shape (T, height, width, 3) with values from 0 to 255
+    """
+    frame_paths = sorted(frames_dir.glob("frame_*.png"))
+    if len(frame_paths) == 0:
+        raise FileNotFoundError(f"No frames found in {frames_dir}")
+    frames = []
+    for frame_path in frame_paths:
+        frames.append(np.asarray(Image.open(frame_path).convert("RGB")))
     return np.stack(frames)
 
 

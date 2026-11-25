@@ -4,7 +4,7 @@ import numpy as np
 
 import config
 from rpca_dance.baselines import classic_pca
-from rpca_dance.rpca import rpca_proximal_gradient
+from rpca_dance.rpca import rpca_fista, rpca_proximal_gradient
 from rpca_dance.simulation import make_low_rank_plus_sparse
 
 
@@ -60,3 +60,15 @@ def test_objective_never_goes_up():
     )
     objective_steps = np.diff(history["objective"])
     assert np.all(objective_steps <= 1e-10)
+
+
+def test_fista_reaches_the_same_objective_as_proximal_gradient():
+    random_generator = np.random.default_rng(config.RANDOM_SEED)
+    low_rank, sparse = make_low_rank_plus_sparse(100, 5, 0.05, random_generator)
+    matrix = low_rank + sparse
+    _, _, slow_history = rpca_proximal_gradient(matrix, 0.1, 0.01, 1e-12, 20000)
+    _, _, fast_history = rpca_fista(matrix, 0.1, 0.01, config.FISTA_TOLERANCE, config.RPCA_MAX_ITERATIONS)
+    # FISTA may go up for a step, so we only check the end point and the speed
+    assert abs(fast_history["objective"][-1] - slow_history["objective"][-1]) < 1e-5 * slow_history["objective"][-1]
+    assert fast_history["objective"][-1] < fast_history["objective"][0]
+    assert len(fast_history["objective"]) < len(slow_history["objective"])
