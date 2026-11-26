@@ -301,3 +301,20 @@ def plot_rhythm(rhythm_result: dict, frames_per_second: int, output_path: Path) 
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def plot_region_of_interest(image: np.ndarray, region: tuple[int, int, int, int], title: str, output_path: Path) -> None:
+    """One image (a frame, or how often each pixel is a dancer) with the region of interest drawn as a rectangle
+
+    region: (top, bottom, left, right), bottom and right excluded
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    top, bottom, left, right = region
+    figure, axis = plt.subplots(figsize=(6, 3.6))
+    axis.imshow(image, cmap="gray", vmin=0, vmax=1)
+    outline = plt.Rectangle((left - 0.5, top - 0.5), right - left, bottom - top, fill=False, edgecolor="red", linewidth=1.5)
+    axis.add_patch(outline)
+    axis.set_title(title, fontsize=9)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)

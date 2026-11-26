@@ -7,7 +7,7 @@ from rpca_dance.baselines import temporal_median
 from rpca_dance.evaluation import (
     describe_mask_file, evaluate_if_possible, f1_score, frame_numbers_to_annotate, load_ground_truth, mask_iou,
 )
-from rpca_dance.masks import foreground_masks, resize_masks
+from rpca_dance.masks import foreground_masks, keep_region, resize_masks
 
 
 def test_f1_score_on_a_small_example():
@@ -76,3 +76,12 @@ def test_describe_mask_file_counts_gray_pixels(tmp_path):
     assert (report["width"], report["height"]) == (6, 4)
     assert report["gray_pixels"] == 1
     assert report["dancer_share"] == 4 / 24
+
+
+def test_keep_region_clears_the_outside():
+    masks = np.ones((2, 4, 5), dtype=bool)
+    kept = keep_region(masks, (1, 3, 2, 4))
+    assert kept.dtype == bool
+    assert kept.sum() == 2 * 2 * 2
+    assert kept[:, 1:3, 2:4].all()
+    assert keep_region(masks, None).sum() == masks.sum()

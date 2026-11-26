@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import cv2
 import numpy as np
 import yt_dlp
 from PIL import Image
@@ -187,3 +188,20 @@ def check_fixed_camera(frames: np.ndarray) -> dict:
         "median_jump": median_jump,
         "jump_ratio": largest_jump / median_jump,
     }
+
+
+def camera_drift(frames: np.ndarray, block_frames: int) -> np.ndarray:
+    """Slow camera move (pan or tilt), which check_fixed_camera cannot see because it has no sudden jump
+
+    We cut the video into blocks of block_frames frames and take the median image of each block (the dancers move,
+    so they mostly disappear from the median). Phase correlation then finds the shift (in pixels) that best moves
+    the first block's image onto each block's image
+    Output: array of shape (number of blocks, 2): the shift (right, down) of each block, in pixels
+    """
+    block_starts = np.arange(0, len(frames) - block_frames + 1, block_frames)
+    first_image = np.median(frames[:block_frames], axis=0).astype(np.float32)
+    shifts = np.zeros((len(block_starts), 2))
+    for position, start in enumerate(block_starts):
+        block_image = np.median(frames[start:start + block_frames], axis=0).astype(np.float32)
+        shifts[position], _ = cv2.phaseCorrelate(first_image, block_image)
+    return shifts

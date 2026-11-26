@@ -102,7 +102,8 @@ SILHOUETTE_HEIGHT = 64
 SILHOUETTE_OUTLIER_SHARE = 0.01
 
 # Time alignment: learner frame t is compared with reference frame t + offset
-# Starting offset for the search (0: the two windows start at the same moment of the song)
+# Known offset: each learner window is chosen by ear so that it starts at the same moment of the song as the
+# reference window, so the offset is 0. The version without search uses it as is; the search starts from it
 LEARNER_START_OFFSET_FRAMES = 0
 # Largest time shift (in frames) tried around the starting offset: 40 frames = 5 s
 MAX_OFFSET_FRAMES = 40
@@ -121,11 +122,36 @@ LIGHTING_RAMP_AMPLITUDE = 0.2
 LIGHTING_STEP_FRAMES = [100, 200]
 LIGHTING_STEP_GAIN = 0.8
 
-# Learner video (part 2): a dance cover of the same choreography, filmed with a fixed camera
-LEARNER_VIDEO_URL = "https://www.youtube.com/watch?v=cPjUB5R3EpI"
-# Window from 0:19 to 0:45; its first frame matches the first frame of the reference window (0:24)
-LEARNER_START_SECONDS = 19.0
-LEARNER_DURATION_SECONDS = 26.0
+# Learner videos (part 2): dance covers of the same choreography, filmed with a fixed camera
+# start_seconds is the moment that matches the start of the reference window (0:24), checked by ear
+# region_of_interest: (top, bottom, left, right) at 160 x 90, bottom and right excluded, or None for the whole
+# frame; the motion is measured only inside it (chosen by looking at the video, before any score)
+LEARNER_VIDEOS = {
+    # Group cover in a gym, 0:19 to 0:45 (the video ends there)
+    "group": {
+        "url": "https://www.youtube.com/watch?v=cPjUB5R3EpI",
+        "start_seconds": 19.0,
+        "duration_seconds": 26.0,
+        "region_of_interest": None,
+    },
+    # Group cover on an outdoor stage, 0:20 to 1:10: the full 50 s of the reference window
+    # The region leaves out the passers-by on the left, the right edge and the bunting at the bottom
+    "outdoor": {
+        "url": "https://www.youtube.com/watch?v=b8tOGBS7Zrw",
+        "start_seconds": 20.0,
+        "duration_seconds": 50.0,
+        "region_of_interest": (28, 74, 46, 146),
+    },
+}
+# Learner used by main.py when no --learner is given
+DEFAULT_LEARNER = "group"
+
+# Unison passages of the choreography (all members do the same moves), in seconds of the reference video,
+# chosen from the choreography before looking at any score: 0:26 to 0:36 and 0:46 to 0:53
+UNISON_PASSAGES_SECONDS = [(26.0, 36.0), (46.0, 53.0)]
+
+# Camera drift check: median image of each block of this many frames (2 s), compared with the first block
+DRIFT_BLOCK_FRAMES = 16
 
 # Score report: the moments with the lowest score, averaged over one second, at least one second apart
 NUMBER_OF_DROPS = 3
@@ -144,7 +170,15 @@ PIXEL_CHANCE_REPEATS = 100
 RHYTHM_SMOOTHING_FRAMES = 3
 # Chance level: circular shifts of the learner curve of at least this many frames (2 s)
 RHYTHM_MIN_CIRCULAR_SHIFT_FRAMES = 16
-# Both chance levels: this percentile of the best values over the search
+# All chance levels: this percentile of the chance values (best value over the search, or the value at the known offset)
 CHANCE_PERCENTILE = 95
 # Sliding window for the local correlation (2 s); the lowest moments are where the rhythm is lost
 RHYTHM_LOCAL_WINDOW_FRAMES = 16
+
+# Known offset from the music (stage 6 follow-up): the sound of each window, mono, at a low sample rate
+AUDIO_SAMPLE_RATE = 8000
+# Amplitude envelope: one value every 10 ms (100 values per second)
+AUDIO_ENVELOPE_RATE = 100
+# The offset is searched within +-2 s (200 envelope values), with at least 10 s of overlap
+AUDIO_MAX_LAG_VALUES = 200
+AUDIO_MIN_OVERLAP_VALUES = 1000

@@ -163,3 +163,72 @@ def rhythm_sanity_checks(
         offset, _, correlations = find_rhythm_offset(reference_curve, copy_curve, 0, max_shift, min_overlap)
         checks[check_name] = (offset, float(correlations.max()))
     return checks
+
+
+def passage_selection(
+    number_of_frames: int, passages_seconds: list[tuple[float, float]], window_start_seconds: float, frames_per_second: int
+) -> np.ndarray:
+    """Which reference frames fall inside the chosen passages (for example the unison passages)
+
+    Frame k (counted from 1) is at window_start_seconds + (k - 1) / frames_per_second in the video.
+    A passage (start, end) keeps the frames with start <= time < end
+    Output: boolean array of number_of_frames values; value k - 1 is True when frame k is kept
+    """
+    frame_times = window_start_seconds + np.arange(number_of_frames) / frames_per_second
+    selection = np.zeros(number_of_frames, dtype=bool)
+    for start_seconds, end_seconds in passages_seconds:
+        selection = selection | ((frame_times >= start_seconds) & (frame_times < end_seconds))
+    return selection
+
+
+def selected_pairs(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, offset: int, frame_selection: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pair the two curves at a given offset, then keep only the pairs whose reference frame is selected
+
+    frame_selection: boolean array over the reference frames (value k - 1 for frame k), from passage_selection
+    Output: the reference values, the learner values, and their reference frame numbers
+    """
+    reference_part, learner_part, value_numbers = overlapping_frames(reference_curve, learner_curve, offset)
+    frame_numbers = value_numbers + 1  # value t (counted from 1) is the change into frame t + 1
+    keep = frame_selection[frame_numbers - 1]
+    return reference_part[keep], learner_part[keep], frame_numbers[keep]
+
+
+def selected_correlation(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, offset: int, frame_selection: np.ndarray
+) -> float:
+    """Rhythm correlation at a known offset (no search), on the selected frames only"""
+    reference_part, learner_part, _ = selected_pairs(reference_curve, learner_curve, offset, frame_selection)
+    return curve_correlation(reference_part, learner_part)
+
+
+def selected_chance_level(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, offset: int, frame_selection: np.ndarray,
+    min_circular_shift: int, percentile: float,
+) -> tuple[float, np.ndarray]:
+    """Chance level at a known offset: shift the whole learner curve in a circle, then correlate on the same frames
+
+    There is no search, so there is no maximum to take: each shift gives one correlation
+    Output: the given percentile of these correlations, and all of them
+    """
+    shifts = np.arange(min_circular_shift, len(learner_curve) - min_circular_shift + 1)
+    correlations = np.zeros(len(shifts))
+    for position, shift in enumerate(shifts):
+        shifted_curve = np.roll(learner_curve, shift)
+        correlations[position] = selected_correlation(reference_curve, shifted_curve, offset, frame_selection)
+    return float(np.percentile(correlations, percentile)), correlations
+
+
+def passage_coverage(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, offset: int, passage_selections: list[np.ndarray]
+) -> list[tuple[int, int]]:
+    """How much of each passage the learner video covers at the given offset
+
+    Output: one (covered values, values in the passage) pair per passage; the first frame has no motion value
+    """
+    coverage = []
+    for frame_selection in passage_selections:
+        _, _, frame_numbers = selected_pairs(reference_curve, learner_curve, offset, frame_selection)
+        coverage.append((len(frame_numbers), int(frame_selection[1:].sum())))
+    return coverage

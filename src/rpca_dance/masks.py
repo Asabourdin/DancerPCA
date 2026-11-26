@@ -39,3 +39,18 @@ def resize_masks(masks: np.ndarray, frame_height: int, frame_width: int) -> np.n
         shares = cv2.resize(mask.astype(np.float32), (frame_width, frame_height), interpolation=cv2.INTER_AREA)
         resized.append(shares > 0.5)
     return np.stack(resized)
+
+
+def keep_region(frames: np.ndarray, region: tuple[int, int, int, int] | None) -> np.ndarray:
+    """Set everything outside a fixed region of interest to zero (False for masks)
+
+    Used for a learner filmed outdoors: people walking far behind the dancers end up in S, but outside the region
+    frames: masks or S, of shape (T, height, width); region: (top, bottom, left, right), bottom and right excluded,
+    or None to keep the whole frame
+    """
+    if region is None:
+        return frames
+    top, bottom, left, right = region
+    inside = np.zeros(frames.shape[1:], dtype=bool)
+    inside[top:bottom, left:right] = True
+    return frames * inside

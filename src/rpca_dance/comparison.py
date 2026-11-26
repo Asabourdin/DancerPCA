@@ -9,7 +9,8 @@ import numpy as np
 
 from rpca_dance.experiments import video_masks
 from rpca_dance.rhythm import (
-    autocorrelation, rhythm_chance_level, rhythm_score, smoothed_motion_curve, sparse_motion_curve,
+    autocorrelation, passage_coverage, passage_selection, rhythm_chance_level, rhythm_score, selected_chance_level,
+    selected_correlation, smoothed_motion_curve, sparse_motion_curve,
 )
 from rpca_dance.similarity import (
     comparison_frame_range, dancer_box, flip_left_right, iou_chance_level, moving_average, normalize_silhouettes,
@@ -131,3 +132,40 @@ def repetition_check(reference_curve: np.ndarray, min_lag: int, max_lag: int) ->
     lags, correlations = autocorrelation(reference_curve, min_lag, max_lag)
     best = int(np.argmax(correlations))
     return int(lags[best]), float(correlations[best])
+
+
+def known_offset_rhythm(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, known_offset: int, min_overlap: int,
+    min_circular_shift: int, percentile: float, local_window: int, number_of_moments: int,
+) -> dict:
+    """Rhythm score at a known offset, with no search: the real use case, where the app plays the music
+
+    It is rhythm_comparison with a search reduced to one offset. The chance level then takes no maximum:
+    it is the percentile of the correlations at the circular shifts
+    """
+    return rhythm_comparison(
+        reference_curve, learner_curve, known_offset, 0, min_overlap, min_circular_shift, percentile,
+        local_window, number_of_moments,
+    )
+
+
+def passage_rhythm(
+    reference_curve: np.ndarray, learner_curve: np.ndarray, known_offset: int, passages_seconds: list,
+    window_start_seconds: float, frames_per_second: int, min_circular_shift: int, percentile: float,
+) -> dict:
+    """Rhythm score at the known offset on the frames of some passages only (for example the unison passages)
+
+    The chance level uses the circular shifts of the whole learner curve, evaluated on the same frames
+    Output: {"score", "chance level", "chance values", "coverage": (covered values, values) for each passage}
+    """
+    number_of_frames = len(reference_curve) + 1
+    selection = passage_selection(number_of_frames, passages_seconds, window_start_seconds, frames_per_second)
+    score = selected_correlation(reference_curve, learner_curve, known_offset, selection)
+    chance, chance_values = selected_chance_level(
+        reference_curve, learner_curve, known_offset, selection, min_circular_shift, percentile,
+    )
+    single_selections = []
+    for passage in passages_seconds:
+        single_selections.append(passage_selection(number_of_frames, [passage], window_start_seconds, frames_per_second))
+    coverage = passage_coverage(reference_curve, learner_curve, known_offset, single_selections)
+    return {"score": score, "chance level": chance, "chance values": chance_values, "coverage": coverage}
