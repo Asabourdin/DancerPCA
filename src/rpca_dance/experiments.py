@@ -13,6 +13,7 @@ from rpca_dance.baselines import classic_pca, temporal_median
 from rpca_dance.decomposition import decomposition_path, run_decomposition, run_with_weights
 from rpca_dance.lighting import apply_brightness, brightness_ramp, brightness_step
 from rpca_dance.masks import foreground_masks
+from rpca_dance.video import frames_to_matrix
 
 
 def print_run_summary(setting_name: str, result: dict, masks: np.ndarray) -> None:
@@ -69,20 +70,20 @@ def baseline_masks(
     return masks, {"classic PCA": pca_time, "temporal median": median_time}
 
 
-def lighting_matrices(matrix: np.ndarray, ramp_amplitude: float, step_frame: int, step_gain: float) -> dict:
-    """Two copies of M with an artificial brightness change: a slow ramp and a sudden step
+def lighting_gains(number_of_frames: int, ramp_amplitude: float, step_frames: list[int], step_gain: float) -> dict:
+    """Gains of every brightness change: one slow ramp, and one sudden step per step frame
 
-    Output: {"ramp": matrix, "step": matrix} and the gains used, in {"ramp gains", "step gains"}
+    Output: {"ramp": gains, "step at 100": gains, ...}, each an array of T gains
     """
-    number_of_frames = matrix.shape[1]
-    ramp_gains = brightness_ramp(number_of_frames, ramp_amplitude)
-    step_gains = brightness_step(number_of_frames, step_frame, step_gain)
-    return {
-        "ramp": apply_brightness(matrix, ramp_gains),
-        "step": apply_brightness(matrix, step_gains),
-        "ramp gains": ramp_gains,
-        "step gains": step_gains,
-    }
+    gains = {"ramp": brightness_ramp(number_of_frames, ramp_amplitude)}
+    for step_frame in step_frames:
+        gains[f"step at {step_frame}"] = brightness_step(number_of_frames, step_frame, step_gain)
+    return gains
+
+
+def lighting_run_path(decompositions_dir: Path, change_name: str) -> Path:
+    """File of the Robust PCA run for one brightness change, for example 160x90_lighting_step_at_100.npz"""
+    return decompositions_dir / f"160x90_lighting_{change_name.replace(' ', '_')}.npz"
 
 
 def lighting_test_masks(
@@ -105,3 +106,43 @@ def lighting_test_masks(
     masks.update(quick_masks)
     times.update(quick_times)
     return masks, times, result
+
+
+def run_lighting_test(
+    matrix: np.ndarray, gains: dict, reference_result: dict, decompositions_dir: Path, tolerance: float,
+    max_iterations: int, frame_height: int, frame_width: int, threshold: float, pca_rank: int,
+) -> dict:
+    """Apply each brightness change to M, then get the masks of the three methods (one loop over the changes)
+
+    Output: {change name: masks by method}
+    """
+    masks_by_change = {}
+    for change_name, change_gains in gains.items():
+        print(f"Lighting test: {change_name}")
+        lit_matrix = apply_brightness(matrix, change_gains)
+        output_path = lighting_run_path(decompositions_dir, change_name)
+        masks, _, result = lighting_test_masks(
+            lit_matrix, reference_result, output_path, tolerance, max_iterations,
+            frame_height, frame_width, threshold, pca_rank,
+        )
+        print_run_summary(f"Robust PCA, {change_name}", result, masks["Robust PCA"])
+        masks_by_change[change_name] = masks
+    return masks_by_change
+
+
+def video_masks(
+    frames: np.ndarray, decompositions_dir: Path, run_name: str, rule: str, tolerance: float,
+    max_iterations: int, threshold: float,
+) -> tuple[np.ndarray, dict]:
+    """Robust PCA (multiplier 1) on a video, then the dancer masks |S| > threshold
+
+    Input: frames of shape (T, height, width)
+    Output: boolean masks of shape (T, height, width), and the run result
+    """
+    _, frame_height, frame_width = frames.shape
+    matrix = frames_to_matrix(frames)
+    output_path = decomposition_path(decompositions_dir, run_name, rule, 1.0)
+    result = run_decomposition(matrix, rule, 1.0, tolerance, max_iterations, output_path)
+    masks = foreground_masks(result["sparse"], frame_height, frame_width, threshold)
+    print_run_summary(run_name, result, masks)
+    return masks, result

@@ -205,3 +205,99 @@ def plot_brightness_gains(gains: dict, output_path: Path) -> None:
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def plot_mean_f1_by_condition(mean_scores: dict, output_path: Path) -> None:
+    """Grouped bars: mean F1 of each method (one bar per method) for each condition (one group per condition)
+
+    mean_scores: {condition name: {method name: mean F1}}, the same methods in every condition
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    condition_names = list(mean_scores)
+    method_names = list(mean_scores[condition_names[0]])
+    bar_width = 0.8 / len(method_names)
+    gray_levels = np.linspace(0.15, 0.85, len(method_names))
+    figure, axis = plt.subplots(figsize=(1.6 * len(condition_names) + 2, 3.5))
+    for position, method_name in enumerate(method_names):
+        values = [mean_scores[condition][method_name] for condition in condition_names]
+        offsets = np.arange(len(condition_names)) + position * bar_width
+        axis.bar(offsets, values, width=bar_width, color=str(gray_levels[position]), edgecolor="black", label=method_name)
+    axis.set_xticks(np.arange(len(condition_names)) + 0.4 - bar_width / 2)
+    axis.set_xticklabels(condition_names, fontsize=8)
+    axis.set_ylim(0, 1)
+    axis.set_ylabel("mean F1 score")
+    axis.legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_pixel_score(result: dict, chance_level: float, drops: list, frames_per_second: int, output_path: Path) -> None:
+    """Pixel IoU of each aligned frame over time, with the chance level and the biggest drops
+
+    result: output of similarity.similarity_score; drops: list of (reference frame number, score)
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, axis = plt.subplots(figsize=(8, 3))
+    times = result["frame_numbers"] / frames_per_second
+    axis.plot(times, result["scores"], color="black", linewidth=1, label="IoU per frame")
+    axis.axhline(chance_level, color="gray", linestyle="--", label="chance level (95th percentile)")
+    for frame_number, _ in drops:
+        axis.axvline(frame_number / frames_per_second, color="gray", linestyle=":")
+    axis.set_xlabel("time in the reference window (seconds)")
+    axis.set_ylabel("IoU of the silhouettes")
+    axis.set_ylim(0, 1)
+    axis.legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_offset_search(pixel_results: dict, rhythm_result: dict, output_path: Path) -> None:
+    """Left: mean IoU for each offset (as filmed and mirrored); right: rhythm correlation for each offset
+
+    Each panel shows its chance level as a dashed line
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, (left_axis, right_axis) = plt.subplots(1, 2, figsize=(9, 3))
+    for line_style, name in zip(["-", "--"], ["as filmed", "mirrored"]):
+        result = pixel_results[name]
+        left_axis.plot(result["offsets_tried"], result["mean_by_offset"], color="black", linestyle=line_style, label=name)
+    left_axis.axhline(pixel_results["chance level"], color="gray", linestyle=":", label="chance level")
+    left_axis.set_xlabel("offset (frames)")
+    left_axis.set_ylabel("mean IoU")
+    left_axis.legend(fontsize=8)
+    right_axis.plot(rhythm_result["offsets_tried"], rhythm_result["correlation_by_offset"], color="black")
+    right_axis.axhline(rhythm_result["chance level"], color="gray", linestyle=":", label="chance level")
+    right_axis.set_xlabel("offset (frames)")
+    right_axis.set_ylabel("rhythm correlation")
+    right_axis.legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_rhythm(rhythm_result: dict, frames_per_second: int, output_path: Path) -> None:
+    """Top: the two aligned motion curves (standardized); bottom: the correlation over a sliding window
+
+    The moments where the rhythm is lost are marked with dotted lines
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, (top_axis, bottom_axis) = plt.subplots(2, 1, figsize=(8, 5), sharex=True)
+    times = rhythm_result["frame_numbers"] / frames_per_second
+    for color, name in zip(["black", "gray"], ["reference", "learner"]):
+        curve = rhythm_result[f"{name}_part"]
+        top_axis.plot(times, (curve - curve.mean()) / curve.std(), color=color, linewidth=1, label=name)
+    top_axis.set_ylabel("movement (standardized)")
+    top_axis.legend(fontsize=8)
+    bottom_axis.plot(rhythm_result["local_frame_numbers"] / frames_per_second, rhythm_result["local"], color="black")
+    bottom_axis.axhline(0, color="gray", linewidth=0.5)
+    for frame_number, _ in rhythm_result["lost_moments"]:
+        bottom_axis.axvline(frame_number / frames_per_second, color="gray", linestyle=":")
+        top_axis.axvline(frame_number / frames_per_second, color="gray", linestyle=":")
+    bottom_axis.set_ylim(-1, 1)
+    bottom_axis.set_xlabel("time in the reference window (seconds)")
+    bottom_axis.set_ylabel("correlation over 2 s")
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)

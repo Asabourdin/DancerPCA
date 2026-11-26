@@ -11,8 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_VIDEO_DIR = DATA_DIR / "raw"
 FRAMES_DIR = DATA_DIR / "frames"
-GROUND_TRUTH_DIR = DATA_DIR / "ground_truth"
-TO_ANNOTATE_DIR = GROUND_TRUTH_DIR / "to_annotate"
+GROUND_TRUTH_DIR = PROJECT_ROOT / "ground_truth"  # hand-made masks, tracked by git
+TO_ANNOTATE_DIR = DATA_DIR / "to_annotate"  # video frames, never committed
 RESULTS_DIR = PROJECT_ROOT / "results"
 DECOMPOSITIONS_DIR = RESULTS_DIR / "decompositions"
 
@@ -98,8 +98,16 @@ CLASSIC_PCA_RANK = 1
 SILHOUETTE_WIDTH = 64
 SILHOUETTE_HEIGHT = 64
 
-# Largest time shift (in frames) tried when aligning the two videos
+# The silhouette box drops this share of the most extreme dancer pixels on each side (stray pixels)
+SILHOUETTE_OUTLIER_SHARE = 0.01
+
+# Time alignment: learner frame t is compared with reference frame t + offset
+# Starting offset for the search (0: the two windows start at the same moment of the song)
+LEARNER_START_OFFSET_FRAMES = 0
+# Largest time shift (in frames) tried around the starting offset: 40 frames = 5 s
 MAX_OFFSET_FRAMES = 40
+# An offset must leave at least this many pairs of frames to be considered
+MIN_OVERLAP_FRAMES = 80
 
 # Set to an integer to force the offset instead of searching for it
 MANUAL_OFFSET_FRAMES = None
@@ -108,6 +116,35 @@ MANUAL_OFFSET_FRAMES = None
 # Lighting stress test (stage 5): artificial brightness changes added to M
 # Slow ramp: the gain goes from 1 - amplitude (first frame) to 1 + amplitude (last frame)
 LIGHTING_RAMP_AMPLITUDE = 0.2
-# Sudden step, like a phone's auto-exposure: frames after this one get the gain below
-LIGHTING_STEP_FRAME = 100
+# Sudden step, like a phone's auto-exposure: frames after the step frame get the gain below
+# Two positions: early (frame 100) and in the middle of the clip (frame 200)
+LIGHTING_STEP_FRAMES = [100, 200]
 LIGHTING_STEP_GAIN = 0.8
+
+# Learner video (part 2): a dance cover of the same choreography, filmed with a fixed camera
+LEARNER_VIDEO_URL = "https://www.youtube.com/watch?v=cPjUB5R3EpI"
+# Window from 0:19 to 0:45; its first frame matches the first frame of the reference window (0:24)
+LEARNER_START_SECONDS = 19.0
+LEARNER_DURATION_SECONDS = 26.0
+
+# Score report: the moments with the lowest score, averaged over one second, at least one second apart
+NUMBER_OF_DROPS = 3
+DROP_WINDOW_FRAMES = 8
+
+# Sanity checks of the score (until or besides a learner video)
+SANITY_TIME_SHIFT_FRAMES = 12  # 1.5 s
+SANITY_SHIFT_PIXELS = 1  # on the 64 x 64 silhouettes
+SANITY_ERASE_SHARE = 0.05
+
+# Chance level of the pixel score: learner frames shuffled this many times, same offset search each time
+PIXEL_CHANCE_REPEATS = 100
+
+# Motion rhythm score (definition fixed before seeing any result)
+# Moving average over this many frames, the same for both videos
+RHYTHM_SMOOTHING_FRAMES = 3
+# Chance level: circular shifts of the learner curve of at least this many frames (2 s)
+RHYTHM_MIN_CIRCULAR_SHIFT_FRAMES = 16
+# Both chance levels: this percentile of the best values over the search
+CHANCE_PERCENTILE = 95
+# Sliding window for the local correlation (2 s); the lowest moments are where the rhythm is lost
+RHYTHM_LOCAL_WINDOW_FRAMES = 16

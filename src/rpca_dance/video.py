@@ -24,6 +24,17 @@ def is_url(source: str) -> bool:
     return source.startswith("http://") or source.startswith("https://")
 
 
+def video_name(source: str) -> str:
+    """Short name of a video, used for its folders and saved files
+
+    YouTube link: the video id after "v=" (for example gSm-eTRl9JE); local file: the file name without extension
+    """
+    if is_url(source) and "v=" in source:
+        after_id_marker = source.split("v=")[1]
+        return after_id_marker.split("&")[0]
+    return Path(source).stem
+
+
 def download_video(url: str, output_dir: Path) -> Path:
     """Download a video with yt-dlp, unless it is already dwnld
 
@@ -33,7 +44,8 @@ def download_video(url: str, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     options = {
         # Video only, at most 720p: we shrink it to 160 x 90 anyways
-        "format": "bestvideo[height<=720][ext=mp4]/best[height<=720][ext=mp4]",
+        # SDR first: an HDR video turned into gray without tone mapping has the wrong contrast
+        "format": "bestvideo[height<=720][ext=mp4][dynamic_range=SDR]/bestvideo[height<=720][ext=mp4]/best[height<=720][ext=mp4]",
         "outtmpl": str(output_dir / "%(id)s.%(ext)s"),
         "quiet": True,
         "noprogress": True,
