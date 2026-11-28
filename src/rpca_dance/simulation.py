@@ -120,3 +120,27 @@ def load_results(input_path: Path) -> dict:
     """Load simulation results saved by save_results"""
     saved = np.load(input_path)
     return {key: saved[key] for key in saved.files}
+
+
+def summarize_success(results: dict, low_rank_weight: float, factor: float) -> dict:
+    """Count the successes of the grid, for one success factor
+
+    Output: a dictionary with the number of trials, the successful Robust PCA trials, the cells where all trials
+    succeed, the successful classic PCA trials, the median and smallest classic PCA error divided by the bias
+    lambda1 * sqrt(r), and the total and largest Robust PCA run times (seconds)
+    """
+    rpca_map, pca_map = success_fraction(results, low_rank_weight, factor)
+    number_of_trials = results["rpca_error"].shape[2]
+    shrinkage_bias = low_rank_weight * np.sqrt(results["true_ranks"].reshape(-1, 1, 1))
+    pca_error_ratios = results["pca_error"] / shrinkage_bias
+    return {
+        "trials": results["rpca_error"].size,
+        "rpca_successful_trials": int(round(rpca_map.sum() * number_of_trials)),
+        "rpca_full_cells": int((rpca_map == 1).sum()),
+        "cells": rpca_map.size,
+        "pca_successful_trials": int(round(pca_map.sum() * number_of_trials)),
+        "pca_median_error_ratio": float(np.median(pca_error_ratios)),
+        "pca_smallest_error_ratio": float(pca_error_ratios.min()),
+        "total_run_time": float(results["run_time"].sum()),
+        "largest_run_time": float(results["run_time"].max()),
+    }

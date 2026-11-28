@@ -5,7 +5,11 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from IPython.display import Image as IPythonImage
+from IPython.display import display
 from PIL import Image
+
+from rpca_dance.operators import soft_threshold
 
 
 def save_frame_image(frame: np.ndarray, output_path: Path, upscale_factor: int = 1) -> None:
@@ -318,3 +322,55 @@ def plot_region_of_interest(image: np.ndarray, region: tuple[int, int, int, int]
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def show_figure(image_path: Path) -> None:
+    """Show a saved PNG or GIF inside the notebook (our plot functions save files and never open a window)"""
+    display(IPythonImage(filename=str(image_path)))
+
+
+def plot_soft_threshold_curve(threshold: float, output_path: Path) -> None:
+    """Plot soft_threshold(x, threshold) against x, next to the line y = x"""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    inputs = np.linspace(-2, 2, 401)
+    outputs = soft_threshold(inputs, threshold)
+    figure, axis = plt.subplots(figsize=(5, 3.5))
+    axis.plot(inputs, inputs, color="gray", linestyle="--", label="y = x (no change)")
+    axis.plot(inputs, outputs, color="black", label=f"soft threshold, tau = {threshold}")
+    axis.axvspan(-threshold, threshold, color="lightgray", alpha=0.5, label="set to exactly 0")
+    axis.set_xlabel("input x")
+    axis.set_ylabel("output")
+    axis.legend(fontsize=8)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def plot_small_matrices(matrices: list[np.ndarray], titles: list[str], output_path: Path) -> None:
+    """Draw small matrices side by side as gray images, with each value written in its cell
+
+    Used for the toy example: rows are pixels, columns are frames
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    number_of_matrices = len(matrices)
+    figure, axes = plt.subplots(1, number_of_matrices, figsize=(2.2 * number_of_matrices, 3), squeeze=False)
+    for axis, matrix, title in zip(axes[0], matrices, titles):
+        axis.imshow(matrix, cmap="gray", vmin=-0.2, vmax=1.0)
+        write_cell_values(axis, matrix)
+        axis.set_xticks(range(matrix.shape[1]), [f"frame {index + 1}" for index in range(matrix.shape[1])], fontsize=7)
+        axis.set_yticks(range(matrix.shape[0]), [f"pixel {index + 1}" for index in range(matrix.shape[0])], fontsize=7)
+        axis.set_title(title, fontsize=9)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)
+
+
+def write_cell_values(axis: plt.Axes, matrix: np.ndarray) -> None:
+    """Write the value of each cell (2 decimals) on an image of a small matrix"""
+    # One loop over all (row, column) pairs, built first
+    cells = itertools.product(range(matrix.shape[0]), range(matrix.shape[1]))
+    for row, column in cells:
+        value = matrix[row, column]
+        # Dark text on light cells, light text on dark cells
+        text_color = "black" if value > 0.4 else "white"
+        axis.text(column, row, f"{value:.2f}", ha="center", va="center", fontsize=8, color=text_color)

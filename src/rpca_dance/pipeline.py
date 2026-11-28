@@ -197,6 +197,19 @@ def run_lighting_test_step(part_one: dict, settings: ModuleType) -> None:
     plot_mean_f1_by_condition(mean_scores, settings.RESULTS_DIR / "lighting_mean_f1.png")
 
 
+def simulation_grid(settings: ModuleType) -> dict:
+    """Load the saved simulation grid (results/simulation_results.npz), or run it and save it (about 5 minutes)"""
+    grid_path = settings.RESULTS_DIR / "simulation_results.npz"
+    if grid_path.exists():
+        print(f"Loading saved simulation grid: {grid_path.name}")
+        return load_results(grid_path)
+    results = run_simulation_grid(settings.SIMULATION_SIZE, settings.SIMULATION_RANK_RATIOS, settings.SIMULATION_SPARSITIES,
+                                  settings.SIMULATION_TRIALS, settings.SIMULATION_LOW_RANK_WEIGHT,
+                                  settings.FISTA_TOLERANCE, settings.RPCA_MAX_ITERATIONS, settings.RANDOM_SEED)
+    save_results(results, grid_path)
+    return results
+
+
 def run_simulations(settings: ModuleType) -> None:
     """SDP check against CVXPY, run times, and the phase transition diagram (option --simulations)
 
@@ -209,15 +222,7 @@ def run_simulations(settings: ModuleType) -> None:
     timings = time_both_solvers(settings.SDP_TIMING_SIZES, settings.SDP_CHECK_RANK, settings.SDP_CHECK_SPARSITY,
                                 settings.RANDOM_SEED, settings.SDP_CHECK_TOLERANCE, settings.SDP_CHECK_MAX_ITERATIONS)
     plot_solver_times(timings, settings.RESULTS_DIR / "sdp_timings.png")
-    grid_path = settings.RESULTS_DIR / "simulation_results.npz"
-    if grid_path.exists():
-        print(f"Loading saved simulation grid: {grid_path.name}")
-        results = load_results(grid_path)
-    else:
-        results = run_simulation_grid(settings.SIMULATION_SIZE, settings.SIMULATION_RANK_RATIOS, settings.SIMULATION_SPARSITIES,
-                                      settings.SIMULATION_TRIALS, settings.SIMULATION_LOW_RANK_WEIGHT,
-                                      settings.FISTA_TOLERANCE, settings.RPCA_MAX_ITERATIONS, settings.RANDOM_SEED)
-        save_results(results, grid_path)
+    results = simulation_grid(settings)
     rpca_map, pca_map = success_fraction(results, settings.SIMULATION_LOW_RANK_WEIGHT, settings.SIMULATION_SUCCESS_FACTOR)
     plot_success_maps([rpca_map, pca_map], ["Robust PCA (FISTA)", "classic PCA (true rank given)"],
                       results["rank_ratios"], results["sparsities"], settings.RESULTS_DIR / "phase_transition.png")

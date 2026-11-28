@@ -180,3 +180,9 @@ def rpca_fista(
             break
     history["run_time"] = time.perf_counter() - start_time
     return low_rank_part, sparse_part, history
+
+
+def objective_never_increases(history: dict) -> bool:
+    """Return True if the objective in the history never goes up from one iteration to the next"""
+    steps = np.diff(history["objective"])
+    return bool(np.all(steps <= 0))

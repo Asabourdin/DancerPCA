@@ -6,16 +6,7 @@ import config
 from rpca_dance.baselines import classic_pca
 from rpca_dance.rpca import rpca_fista, rpca_proximal_gradient
 from rpca_dance.simulation import make_low_rank_plus_sparse
-
-
-def make_toy_example() -> tuple[np.ndarray, np.ndarray]:
-    """Toy video to check our code before acc running on the real vid: 4 pixels, 3 frames, one dancer on pixel 3 in frame 2"""
-    studio = np.array([0.5, 0.5, 0.2, 0.8])
-    brightness = np.array([1.0, 0.9, 1.1])
-    background = np.outer(studio, brightness)
-    dancer = np.zeros((4, 3))
-    dancer[2, 1] = 0.6
-    return background, dancer
+from rpca_dance.toy import make_toy_example
 
 
 def test_classic_pca_smears_the_dancer():
