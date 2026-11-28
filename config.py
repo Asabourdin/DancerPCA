@@ -182,3 +182,9 @@ AUDIO_ENVELOPE_RATE = 100
 # The offset is searched within +-2 s (200 envelope values), with at least 10 s of overlap
 AUDIO_MAX_LAG_VALUES = 200
 AUDIO_MIN_OVERLAP_VALUES = 1000
+# The audio offset is used only if it is reliable: the best correlation is at least AUDIO_MIN_PEAK_RATIO times
+# the highest correlation at least AUDIO_PEAK_DISTANCE_VALUES (0.1 s) away, and the best lag is more than
+# AUDIO_EDGE_MARGIN_VALUES (0.1 s) away from the edges of the +-2 s search. Otherwise main.py uses --learner-offset
+AUDIO_MIN_PEAK_RATIO = 1.3
+AUDIO_PEAK_DISTANCE_VALUES = 10
+AUDIO_EDGE_MARGIN_VALUES = 10

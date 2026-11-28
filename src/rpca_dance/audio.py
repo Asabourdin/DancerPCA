@@ -96,3 +96,38 @@ def window_envelope(
 def audio_offset_frames(lag: int, envelope_rate: int, frames_per_second: int) -> int:
     """Turn a lag in envelope values into a lag in video frames, rounded to the nearest frame"""
     return int(round(lag * frames_per_second / envelope_rate))
+
+
+def audio_peak_check(
+    lags: np.ndarray, correlations: np.ndarray, min_distance: int, edge_margin: int, min_ratio: float
+) -> dict:
+    """Is the best lag of the envelope search reliable enough to be used as the known offset?
+
+    Rule (fixed before running main.py): the best correlation must be at least min_ratio times the next peak,
+    which is the highest correlation at least min_distance values away from the best lag; and the best lag
+    must not be at the edge of the search (within edge_margin values of the first or last lag tried)
+    Output: {"lag", "best", "next peak", "ratio", "at edge", "reliable"}
+    """
+    best_position = int(np.argmax(correlations))
+    best_lag = int(lags[best_position])
+    far_from_best = np.abs(lags - best_lag) >= min_distance
+    next_peak = float(correlations[far_from_best].max())
+    best = float(correlations[best_position])
+    at_edge = bool(best_lag <= lags[0] + edge_margin or best_lag >= lags[-1] - edge_margin)
+    ratio = best / next_peak
+    return {"lag": best_lag, "best": best, "next peak": next_peak, "ratio": ratio, "at edge": at_edge,
+            "reliable": bool(ratio >= min_ratio and not at_edge)}
+
+
+def has_audio(video_path: Path) -> bool:
+    """True if the video file has a sound track (asks ffprobe)"""
+    command = ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(video_path)]
+    output = subprocess.run(command, check=True, capture_output=True, text=True).stdout
+    return output.strip() != ""
+
+
+def source_has_audio(source: str) -> bool:
+    """A YouTube link is taken as having sound; for a local file, ffprobe tells"""
+    if is_url(source):
+        return True
+    return has_audio(Path(source))
